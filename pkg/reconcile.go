@@ -109,11 +109,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 
 	// patch deployment and if updated, return
 
-	depPatch := appsv1.Deployment{}
-	depPatch.Spec = *dep.Spec.DeepCopy()
-	depPatch.Spec.Template.Spec.Containers[0].EnvFrom = newDep.Spec.Template.Spec.Containers[0].EnvFrom // Ignore the envFrom added by SBO
-	patch := client.StrategicMergeFrom(&depPatch)
-	err = r.Client.Patch(ctx, newDep, patch)
+	err = r.Client.Patch(ctx, newDep, client.Apply, client.FieldOwner("ododev"))
 	if err != nil {
 		return reconcile.Result{}, err
 	}
