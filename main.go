@@ -59,7 +59,39 @@ func main() {
 		panic(err)
 	}
 
-	select {}
+	devfileWatcher, err := pkg.NewDevfileWatcher()
+	if err != nil {
+		panic(err)
+	}
+	defer devfileWatcher.Close()
+
+	for {
+		select {
+		case event, ok := <-devfileWatcher.Events:
+			entryLog.Info("event")
+			if !ok {
+				return
+			}
+			//if event.Op&fsnotify.Write == fsnotify.Write {
+			entryLog.Info("modified file: " + event.Name)
+			err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), "devfile.yaml", namespace, componentName)
+			if err != nil {
+				panic(err)
+			}
+			//err = devfileWatcher.Add("devfile.yaml")
+			//if err != nil {
+			//	panic(err)
+			//}
+			//}
+		case err, ok := <-devfileWatcher.Errors:
+			entryLog.Info("error")
+			if !ok {
+				return
+			}
+			entryLog.Info("error: ", err)
+		}
+		entryLog.Info("==========================================")
+	}
 }
 
 func startManager(mgr manager.Manager, namespace string, componentName string) error {

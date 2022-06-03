@@ -10,6 +10,7 @@ import (
 	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -35,9 +36,16 @@ func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filen
 	})
 	configMap.SetGeneration(1)
 
-	err = client.Create(context.Background(), &configMap)
+	err = client.Create(ctx, &configMap)
 	if err != nil {
-		return err
+		if errors.IsAlreadyExists(err) {
+			err = client.Update(ctx, &configMap)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 	return nil
 }

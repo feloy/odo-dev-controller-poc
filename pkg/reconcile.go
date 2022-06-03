@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -72,6 +73,14 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	// Compute the expected deployment
+	var newDep *appsv1.Deployment
+	newDep, err = buildDeployment(*devfileObj, componentName, request.Namespace)
+	if err != nil {
+		log.Error(err, "building deployment resource")
+		return reconcile.Result{}, err
+	}
+
 	// Get the deployment for dev
 	var dep appsv1.Deployment
 
@@ -80,17 +89,10 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		Name:      componentName,
 	}, &dep)
 
+	newDep.SetOwnerReferences(append(newDep.GetOwnerReferences(), ownerRef))
+
 	if errors.IsNotFound(err) {
 		// Create it and terminate
-		var newDep *appsv1.Deployment
-		newDep, err = buildDeployment(*devfileObj, componentName, request.Namespace)
-		if err != nil {
-			log.Error(err, "building deployment resource")
-			return reconcile.Result{}, err
-		}
-
-		newDep.SetOwnerReferences(append(newDep.GetOwnerReferences(), ownerRef))
-
 		err = r.Client.Create(ctx, newDep)
 		if err != nil {
 			yml, _ := yaml.Marshal(newDep)
@@ -105,7 +107,25 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	// TODO patch deployment and if updated, return
+	// patch deployment and if updated, return
+
+	depPatch := appsv1.Deployment{}
+	depPatch.Spec = *dep.Spec.DeepCopy()
+	patch := client.MergeFrom(&depPatch)
+	err = r.Client.Patch(ctx, newDep, patch)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	log.Info("newDep generation: " + strconv.Itoa(int(newDep.Generation)))
+
+	if dep.Generation < newDep.Generation {
+		log.Info("Updated deployment",
+			"previous generation", dep.Generation,
+			"new generation", newDep.GenerateName,
+		)
+		return reconcile.Result{}, nil
+	}
 
 	// Deployment exists
 	log.Info("deployment exists",

@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/devfile/api/v2 v2.0.0-20220309195345-48ebbf1e51cf
 	github.com/devfile/library v1.2.1-0.20220602130922-85a4805bd59c
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/redhat-developer/service-binding-operator v1.0.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -23,7 +24,6 @@ require (
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fatih/color v1.7.0 // indirect
-	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
 	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
