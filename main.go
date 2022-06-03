@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/feloy/ododev/pkg"
+
+	bindingApi "github.com/redhat-developer/service-binding-operator/apis/binding/v1alpha1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -44,6 +48,10 @@ func main() {
 			panic(err)
 		}
 	}()
+
+	// register ServiceBinding resources
+	mgr.GetClient().Scheme().AddKnownTypes(bindingApi.GroupVersion, &bindingApi.ServiceBinding{}, &bindingApi.ServiceBindingList{})
+	metav1.AddToGroupVersion(mgr.GetClient().Scheme(), bindingApi.GroupVersion)
 
 	ctx := context.Background()
 	err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), "devfile.yaml", namespace, componentName)
@@ -94,6 +102,12 @@ func startManager(mgr manager.Manager, namespace string, componentName string) e
 	}
 
 	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{}, configMapPredicate); err != nil {
+		return err
+	}
+
+	// Watch Deployments and enqueue owning ConfigMap key
+	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}},
+		&handler.EnqueueRequestForOwner{OwnerType: &corev1.ConfigMap{}, IsController: true}); err != nil {
 		return err
 	}
 

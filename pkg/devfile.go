@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 
+	devfilev1 "github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
 	"github.com/devfile/library/pkg/devfile"
 	"github.com/devfile/library/pkg/devfile/parser"
+	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -49,4 +51,46 @@ func InfoFromDevfileConfigMap(ctx context.Context, client client.Client, cm core
 		return nil, "", err
 	}
 	return &devfileObj, cm.GetLabels()[DevfileSpecLabel], nil
+}
+
+// From odo/pkg/devfile
+func GetKubernetesComponentsToPush(devfileObj parser.DevfileObj) ([]devfilev1.Component, error) {
+	k8sComponents, err := devfileObj.Data.GetComponents(common.DevfileOptions{
+		ComponentOptions: common.ComponentOptions{ComponentType: devfilev1.KubernetesComponentType},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	componentsMap := map[string]devfilev1.Component{}
+	for _, component := range k8sComponents {
+		componentsMap[component.Name] = component
+	}
+
+	commands, err := devfileObj.Data.GetCommands(common.DevfileOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, command := range commands {
+		componentName := ""
+		if command.Exec != nil {
+			componentName = command.Exec.Component
+		} else if command.Apply != nil {
+			componentName = command.Apply.Component
+		}
+		if componentName == "" {
+			continue
+		}
+		delete(componentsMap, componentName)
+	}
+
+	k8sComponents = make([]devfilev1.Component, len(componentsMap))
+	i := 0
+	for _, v := range componentsMap {
+		k8sComponents[i] = v
+		i++
+	}
+
+	return k8sComponents, err
 }
