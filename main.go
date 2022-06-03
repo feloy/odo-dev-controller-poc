@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -53,13 +55,18 @@ func main() {
 	mgr.GetClient().Scheme().AddKnownTypes(bindingApi.GroupVersion, &bindingApi.ServiceBinding{}, &bindingApi.ServiceBindingList{})
 	metav1.AddToGroupVersion(mgr.GetClient().Scheme(), bindingApi.GroupVersion)
 
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	devfilePath := filepath.Join(wd, "devfile.yaml")
 	ctx := context.Background()
-	err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), "devfile.yaml", namespace, componentName)
+	err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
 	if err != nil {
 		panic(err)
 	}
 
-	devfileWatcher, err := pkg.NewDevfileWatcher()
+	devfileWatcher, err := pkg.NewDevfileWatcher(devfilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -72,17 +79,11 @@ func main() {
 			if !ok {
 				return
 			}
-			//if event.Op&fsnotify.Write == fsnotify.Write {
 			entryLog.Info("modified file: " + event.Name)
-			err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), "devfile.yaml", namespace, componentName)
+			err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
 			if err != nil {
 				panic(err)
 			}
-			//err = devfileWatcher.Add("devfile.yaml")
-			//if err != nil {
-			//	panic(err)
-			//}
-			//}
 		case err, ok := <-devfileWatcher.Errors:
 			entryLog.Info("error")
 			if !ok {

@@ -111,7 +111,8 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 
 	depPatch := appsv1.Deployment{}
 	depPatch.Spec = *dep.Spec.DeepCopy()
-	patch := client.MergeFrom(&depPatch)
+	depPatch.Spec.Template.Spec.Containers[0].EnvFrom = newDep.Spec.Template.Spec.Containers[0].EnvFrom // Ignore the envFrom added by SBO
+	patch := client.StrategicMergeFrom(&depPatch)
 	err = r.Client.Patch(ctx, newDep, patch)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -154,5 +155,6 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	// All bindings are injected
 	log.Info("all bindings injected")
 
+	// TODO sync files, exec commands, etc
 	return reconcile.Result{}, nil
 }
