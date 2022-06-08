@@ -134,6 +134,10 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	)
 
 	if dep.Status.AvailableReplicas < 1 {
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusWaitDeployment)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 		return reconcile.Result{}, nil
 	}
 
@@ -146,11 +150,20 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	}
 	if !allInjected {
 		log.Info("missing bindings")
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusWaitBindings)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 		return reconcile.Result{}, nil
 	}
 
 	// All bindings are injected
 	log.Info("all bindings injected")
+
+	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusReady)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	// TODO sync files, exec commands, etc
 	return reconcile.Result{}, nil
