@@ -19,10 +19,10 @@ const (
 	DevfileSpecLabel = "devfile-spec"
 )
 
-func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filename string, namespace string, componentName string) error {
+func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filename string, namespace string, componentName string) (*corev1.ConfigMap, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	configMap := corev1.ConfigMap{
 		Data: map[string]string{
@@ -41,13 +41,13 @@ func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filen
 		if errors.IsAlreadyExists(err) {
 			err = client.Update(ctx, &configMap)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		} else {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return &configMap, nil
 }
 
 func InfoFromDevfileConfigMap(ctx context.Context, client client.Client, cm corev1.ConfigMap) (*parser.DevfileObj, string, error) {
