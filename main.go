@@ -8,6 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/feloy/ododev/pkg"
+	"github.com/feloy/ododev/pkg/controller"
+	"github.com/feloy/ododev/pkg/devfile"
 
 	bindingApi "github.com/redhat-developer/service-binding-operator/apis/binding/v1alpha1"
 
@@ -38,7 +40,7 @@ func main() {
 
 	go func() {
 		entryLog.Info("starting manager")
-		err := pkg.StartManager(mgr, namespace, componentName)
+		err := controller.StartManager(mgr, namespace, componentName)
 		if err != nil {
 			panic(err)
 		}
@@ -54,7 +56,7 @@ func main() {
 	}
 	devfilePath := filepath.Join(wd, "devfile.yaml")
 	ctx := context.Background()
-	err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
+	_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
 	if err != nil {
 		panic(err)
 	}
@@ -73,7 +75,7 @@ func main() {
 				return
 			}
 			entryLog.Info("modified file: " + event.Name)
-			err = pkg.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
+			_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
 			if err != nil {
 				panic(err)
 			}

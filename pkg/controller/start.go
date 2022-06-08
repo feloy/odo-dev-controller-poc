@@ -1,4 +1,4 @@
-package pkg
+package controller
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
@@ -11,6 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/feloy/ododev/pkg/devfile"
 )
 
 func StartManager(mgr manager.Manager, namespace string, componentName string) error {
@@ -26,26 +28,26 @@ func StartManager(mgr manager.Manager, namespace string, componentName string) e
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// The object doesn't contain label "devfile-spec=<component-name>", so the event will be
 			// ignored.
-			if cmp, ok := e.ObjectNew.GetLabels()[DevfileSpecLabel]; !ok || cmp != componentName {
+			if cmp, ok := e.ObjectNew.GetLabels()[devfile.DevfileSpecLabel]; !ok || cmp != componentName {
 				return false
 			}
 
 			return e.ObjectOld != e.ObjectNew
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			if cmp, ok := e.Object.GetLabels()[DevfileSpecLabel]; !ok || cmp != componentName {
+			if cmp, ok := e.Object.GetLabels()[devfile.DevfileSpecLabel]; !ok || cmp != componentName {
 				return false
 			}
 			return true
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			if cmp, ok := e.Object.GetLabels()[DevfileSpecLabel]; !ok || cmp != componentName {
+			if cmp, ok := e.Object.GetLabels()[devfile.DevfileSpecLabel]; !ok || cmp != componentName {
 				return false
 			}
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			if cmp, ok := e.Object.GetLabels()[DevfileSpecLabel]; !ok || cmp != componentName {
+			if cmp, ok := e.Object.GetLabels()[devfile.DevfileSpecLabel]; !ok || cmp != componentName {
 				return false
 			}
 			return true

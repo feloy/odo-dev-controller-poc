@@ -1,10 +1,11 @@
-package pkg
+package controller
 
 import (
 	"context"
 	"fmt"
 	"strconv"
 
+	"github.com/feloy/ododev/pkg/devfile"
 	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -48,14 +49,14 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		Controller: pointer.Bool(true),
 	}
 
-	devfileObj, componentName, err := InfoFromDevfileConfigMap(ctx, r.Client, cm)
+	devfileObj, componentName, err := devfile.InfoFromDevfileConfigMap(ctx, r.Client, cm)
 	if err != nil {
 		log.Error(err, "getting devfile from configmap")
 		return reconcile.Result{}, err
 	}
 
 	// Apply the Kubernetes components
-	k8sComponents, err := GetKubernetesComponentsToPush(*devfileObj)
+	k8sComponents, err := devfile.GetKubernetesComponentsToPush(*devfileObj)
 	if err != nil {
 		log.Error(err, "getting Kubernetes components to push")
 		return reconcile.Result{}, err

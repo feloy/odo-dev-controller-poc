@@ -1,4 +1,4 @@
-package pkg
+package controller
 
 import (
 	"github.com/devfile/library/pkg/devfile/generator"

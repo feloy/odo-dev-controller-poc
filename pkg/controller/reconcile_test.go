@@ -1,9 +1,10 @@
-package pkg
+package controller
 
 import (
 	"context"
 	"time"
 
+	"github.com/feloy/ododev/pkg/devfile"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -38,7 +39,7 @@ var _ = Describe("Static controller", func() {
 		)
 
 		BeforeEach(func() {
-			cm, err := CreateConfigMapFromDevfile(ctx, k8sClient, "tests/devfile.yaml", namespace, componentName)
+			cm, err := devfile.CreateConfigMapFromDevfile(ctx, k8sClient, "tests/devfile.yaml", namespace, componentName)
 			Expect(err).Should(Succeed())
 
 			expectedOwnerReference = metav1.OwnerReference{
