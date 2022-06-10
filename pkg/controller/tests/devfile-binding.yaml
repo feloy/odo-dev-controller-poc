@@ -1,0 +1,78 @@
+commands:
+- exec:
+    commandLine: GOCACHE=${PROJECT_SOURCE}/.cache go build main.go
+    component: runtime
+    group:
+      isDefault: true
+      kind: build
+    hotReloadCapable: false
+    workingDir: ${PROJECT_SOURCE}
+  id: build
+- exec:
+    commandLine: ./main
+    component: runtime
+    group:
+      isDefault: true
+      kind: run
+    hotReloadCapable: false
+    workingDir: ${PROJECT_SOURCE}
+  id: run
+components:
+- container:
+    args:
+    - -c
+    - tail -f /dev/null
+    command:
+    - bash
+    dedicatedPod: false
+    endpoints:
+    - name: http
+      secure: false
+      targetPort: 8080
+    image: golang:latest
+    memoryLimit: 512Mi
+    mountSources: true
+  name: runtime
+- kubernetes:
+    inlined: |
+      apiVersion: binding.operators.coreos.com/v1alpha1
+      kind: ServiceBinding
+      metadata:
+        creationTimestamp: null
+        name: my-go-app-cluster-sample
+      spec:
+        application:
+          group: apps
+          name: my-go-app
+          resource: deployments
+          version: v1
+        bindAsFiles: true
+        detectBindingResources: true
+        services:
+        - group: postgresql.k8s.enterprisedb.io
+          id: my-go-app-cluster-sample
+          kind: Cluster
+          name: cluster-sample
+          resource: clusters
+          version: v1
+      status:
+        secret: ""
+  name: my-go-app-cluster-sample
+metadata:
+  description: Stack with the latest Go version
+  displayName: Go Runtime
+  icon: https://raw.githubusercontent.com/devfile-samples/devfile-stack-icons/main/golang.svg
+  language: go
+  name: my-go-app
+  projectType: go
+  tags:
+  - Go
+  version: 1.0.0
+schemaVersion: 2.0.0
+starterProjects:
+- git:
+    checkoutFrom:
+      revision: main
+    remotes:
+      origin: https://github.com/devfile-samples/devfile-stack-go.git
+  name: go-starter

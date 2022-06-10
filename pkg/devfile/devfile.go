@@ -11,6 +11,7 @@ import (
 	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -116,7 +117,7 @@ func GetKubernetesComponentsToPush(devfileObj parser.DevfileObj) ([]devfilev1.Co
 	return k8sComponents, err
 }
 
-func SetStatus(ctx context.Context, client client.Client, namespace string, componentName string, status Status) error {
+func SetStatus(ctx context.Context, client client.Client, namespace string, componentName string, ownerRef metav1.OwnerReference, status Status) error {
 	configMap := corev1.ConfigMap{
 		Data: map[string]string{
 			"status": string(status),
