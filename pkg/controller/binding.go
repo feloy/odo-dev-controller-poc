@@ -7,6 +7,7 @@ import (
 	bindingApi "github.com/redhat-developer/service-binding-operator/apis/binding/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -18,6 +19,10 @@ func checkServiceBindingsInjectionDone(ctx context.Context, cli client.Client, n
 	}
 	err := cli.List(ctx, &list, opts...)
 	if err != nil {
+		// If ServiceBinding kind is not registered => all bindings are done
+		if runtime.IsNotRegisteredError(err) {
+			return true, nil
+		}
 		return false, err
 	}
 

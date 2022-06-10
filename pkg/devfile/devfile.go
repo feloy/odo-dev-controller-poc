@@ -11,7 +11,7 @@ import (
 	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	pkgclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,17 +54,11 @@ func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filen
 	configMap.SetLabels(map[string]string{
 		DevfileSpecLabel: componentName,
 	})
+	configMap.APIVersion, configMap.Kind = corev1.SchemeGroupVersion.WithKind("ConfigMap").ToAPIVersionAndKind()
 
-	err = client.Create(ctx, &configMap)
+	err = client.Patch(ctx, &configMap, pkgclient.Apply, pkgclient.FieldOwner("ododev"), pkgclient.ForceOwnership)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			err = client.Update(ctx, &configMap)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 	return &configMap, nil
 }
@@ -138,4 +132,17 @@ func SetStatus(ctx context.Context, client client.Client, namespace string, comp
 
 	err := client.Patch(ctx, &configMap, pkgclient.Apply, pkgclient.FieldOwner("ododev"))
 	return err
+}
+
+func GetStatus(ctx context.Context, client client.Client, namespace string, componentName string) (Status, error) {
+	cmKey := types.NamespacedName{
+		Namespace: namespace,
+		Name:      devfileStatusName,
+	}
+	var cm corev1.ConfigMap
+	err := client.Get(ctx, cmKey, &cm)
+	if err != nil {
+		return "", err
+	}
+	return Status(cm.Data["status"]), nil
 }

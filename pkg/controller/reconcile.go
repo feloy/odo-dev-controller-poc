@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/feloy/ododev/pkg/devfile"
-	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -20,7 +19,6 @@ import (
 )
 
 type ReconcileConfigmap struct {
-	// client can be used to retrieve objects from the APIServer.
 	Client client.Client
 }
 
@@ -81,6 +79,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		log.Error(err, "building deployment resource")
 		return reconcile.Result{}, err
 	}
+	newDep.SetOwnerReferences(append(newDep.GetOwnerReferences(), ownerRef))
 
 	// Get the deployment for dev
 	var dep appsv1.Deployment
@@ -90,27 +89,13 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		Name:      componentName,
 	}, &dep)
 
-	newDep.SetOwnerReferences(append(newDep.GetOwnerReferences(), ownerRef))
-
-	if errors.IsNotFound(err) {
-		// Create it and terminate
-		err = r.Client.Create(ctx, newDep)
-		if err != nil {
-			yml, _ := yaml.Marshal(newDep)
-			fmt.Printf("%s\n", yml)
-			log.Error(err, "creating deployment")
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{}, nil
-	}
-
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		return reconcile.Result{}, err
 	}
 
 	// patch deployment and if updated, return
 
-	err = r.Client.Patch(ctx, newDep, client.Apply, client.FieldOwner("ododev"))
+	err = r.Client.Patch(ctx, newDep, client.Apply, client.FieldOwner("ododev"), client.ForceOwnership)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -125,7 +110,8 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, nil
 	}
 
-	// Deployment exists
+	// state: Deployment exists
+
 	log.Info("deployment exists",
 		"avail replicas", dep.Status.AvailableReplicas,
 		"ready replicas", dep.Status.ReadyReplicas,
@@ -141,7 +127,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, nil
 	}
 
-	// Deployment has a Running pod
+	// state: Deployment has a Running pod
 
 	// Check if all servicebindings' InjectionReady is true
 	allInjected, err := checkServiceBindingsInjectionDone(ctx, r.Client, request.Namespace, componentName)
@@ -157,7 +143,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, nil
 	}
 
-	// All bindings are injected
+	// state: All bindings are injected
 	log.Info("all bindings injected")
 
 	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusReady)
