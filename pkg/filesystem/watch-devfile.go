@@ -1,4 +1,4 @@
-package pkg
+package filesystem
 
 import (
 	"github.com/fsnotify/fsnotify"

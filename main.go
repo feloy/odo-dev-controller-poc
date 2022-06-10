@@ -7,9 +7,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/feloy/ododev/pkg"
 	"github.com/feloy/ododev/pkg/controller"
 	"github.com/feloy/ododev/pkg/devfile"
+	"github.com/feloy/ododev/pkg/filesystem"
 
 	bindingApi "github.com/redhat-developer/service-binding-operator/apis/binding/v1alpha1"
 
@@ -61,7 +61,7 @@ func main() {
 		panic(err)
 	}
 
-	devfileWatcher, err := pkg.NewDevfileWatcher(devfilePath)
+	devfileWatcher, err := filesystem.NewDevfileWatcher(devfilePath)
 	if err != nil {
 		panic(err)
 	}
