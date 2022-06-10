@@ -25,7 +25,7 @@ func init() {
 
 func main() {
 	var (
-		namespace     = "default"
+		namespace     = "project1"
 		componentName = "my-go-app"
 	)
 

@@ -43,7 +43,7 @@ components:
       spec:
         application:
           group: apps
-          name: my-go-app
+          name: my-go-app-app
           resource: deployments
           version: v1
         bindAsFiles: true

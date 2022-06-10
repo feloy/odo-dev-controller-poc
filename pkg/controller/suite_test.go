@@ -28,7 +28,7 @@ var (
 	testEnv    *envtest.Environment
 	k8sManager ctrl.Manager
 
-	namespace     = "default"
+	namespace     = "test"
 	componentName = "my-go-app"
 )
 

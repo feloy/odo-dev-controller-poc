@@ -86,7 +86,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 
 	err = r.Client.Get(ctx, types.NamespacedName{
 		Namespace: request.Namespace,
-		Name:      componentName,
+		Name:      getDeploymentName(componentName),
 	}, &dep)
 
 	if err != nil && !errors.IsNotFound(err) {
@@ -120,7 +120,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	)
 
 	if dep.Status.AvailableReplicas < 1 {
-		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusWaitDeployment)
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusWaitDeployment)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -136,7 +136,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	}
 	if !allInjected {
 		log.Info("missing bindings")
-		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusWaitBindings)
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusWaitBindings)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -146,7 +146,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	// state: All bindings are injected
 	log.Info("all bindings injected")
 
-	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, devfile.StatusReady)
+	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusReady)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

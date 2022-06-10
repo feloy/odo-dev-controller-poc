@@ -130,6 +130,7 @@ func SetStatus(ctx context.Context, client client.Client, namespace string, comp
 	configMap.SetLabels(map[string]string{
 		DevfileStatusLabel: componentName,
 	})
+	configMap.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
 
 	err := client.Patch(ctx, &configMap, pkgclient.Apply, pkgclient.FieldOwner("ododev"))
 	return err

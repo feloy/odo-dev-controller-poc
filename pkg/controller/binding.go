@@ -28,7 +28,9 @@ func checkServiceBindingsInjectionDone(ctx context.Context, cli client.Client, n
 
 	for _, binding := range list.Items {
 		app := binding.Spec.Application
-		if app.Group != appsv1.SchemeGroupVersion.Group || app.Version != appsv1.SchemeGroupVersion.Version || app.Kind != "Deployment" {
+		if app.Group != appsv1.SchemeGroupVersion.Group ||
+			app.Version != appsv1.SchemeGroupVersion.Version ||
+			(app.Kind != "Deployment" && app.Resource != "deployments") {
 			continue
 		}
 		if injected := meta.IsStatusConditionTrue(binding.Status.Conditions, bindingApis.InjectionReady); !injected {

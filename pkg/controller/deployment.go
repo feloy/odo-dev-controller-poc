@@ -24,10 +24,10 @@ func buildDeployment(devfileObj parser.DevfileObj, componentName string, namespa
 		"component": componentName,
 	}
 
-	deploymentObjectMeta := generator.GetObjectMeta(componentName, namespace, selectorLabels, nil)
+	deploymentObjectMeta := generator.GetObjectMeta(getDeploymentName(componentName), namespace, selectorLabels, nil)
 
 	apiVersion, kind := appsv1.SchemeGroupVersion.WithKind("Deployment").ToAPIVersionAndKind()
-	return generator.GetDeployment(devfileObj, generator.DeploymentParams{
+	dep, err := generator.GetDeployment(devfileObj, generator.DeploymentParams{
 		TypeMeta:          generator.GetTypeMeta(kind, apiVersion),
 		ObjectMeta:        deploymentObjectMeta,
 		InitContainers:    initContainers,
@@ -35,4 +35,14 @@ func buildDeployment(devfileObj parser.DevfileObj, componentName string, namespa
 		PodSelectorLabels: selectorLabels,
 		Replicas:          pointer.Int32Ptr(1),
 	})
+
+	// [for tests]
+	dep.Spec.Template.Spec.Containers[0].ImagePullPolicy = "IfNotPresent"
+	dep.Spec.Template.Spec.TerminationGracePeriodSeconds = pointer.Int64(5)
+	// [/for tests]
+	return dep, err
+}
+
+func getDeploymentName(componentName string) string {
+	return componentName + "-app"
 }
