@@ -2,13 +2,12 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
+	"github.com/feloy/ododev/pkg/container"
 	"github.com/feloy/ododev/pkg/devfile"
-	"github.com/feloy/ododev/pkg/filesystem"
 	"github.com/feloy/ododev/pkg/libdevfile"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -32,7 +31,6 @@ var _ reconcile.Reconciler = &ReconcileConfigmap{}
 
 func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := log.FromContext(ctx)
-	fmt.Printf("got request for %s\n", request.String())
 
 	// Get the configmap containing the Devfile
 	var cm corev1.ConfigMap
@@ -186,7 +184,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		}
 		defer tarReader.Close()
 
-		err = filesystem.ExtractTarToContainer(ctx, r.Client, r.Manager, pod, "runtime", "/projects", tarReader) // TODO container name, target path
+		err = container.ExtractTarToContainer(ctx, r.Client, r.Manager, pod, "runtime", "/projects", tarReader) // TODO container name, target path
 		if err != nil {
 			return reconcile.Result{}, err
 		}

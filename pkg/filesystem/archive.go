@@ -1,7 +1,6 @@
 package filesystem
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -63,7 +62,6 @@ func getAllFiles(rootPath string, ignoreMatcher *gitignore.GitIgnore) ([]string,
 				return nil
 			}
 
-			fmt.Printf("add to tar: %s\n", path)
 			result = append(result, path)
 			return nil
 		})

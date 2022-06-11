@@ -8,7 +8,6 @@ import (
 
 	"github.com/rjeczalik/notify"
 	gitignore "github.com/sabhiram/go-gitignore"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func Watch(
@@ -18,8 +17,6 @@ func Watch(
 	modifiedDevfile func() error,
 	modifiedSources func(deleted []string, modified []string) error,
 ) error {
-
-	entryLog := log.Log.WithName("watch")
 
 	devfileWatcher, err := filesystem.NewDevfileWatcher(devfilePath)
 	if err != nil {
@@ -41,32 +38,18 @@ func Watch(
 	for {
 		select {
 
-		case notif := <-devfileWatcher:
-			entryLog.Info("devfile event")
-			path := notif.Path()
-			rel, err := filepath.Rel(wd, path)
-			if err != nil {
-				return err
-			}
-			entryLog.Info("modified file: " + rel)
+		case <-devfileWatcher:
 			err = modifiedDevfile()
 			if err != nil {
 				return err
 			}
 
 		case notif := <-sourcesWatcher:
-			entryLog.Info("sources event")
 			event := notif.Event()
 			path := notif.Path()
 			rel, err := filepath.Rel(wd, path)
 			if err != nil {
 				return err
-			}
-			switch event {
-			case notify.InCloseWrite:
-				entryLog.Info("Editing of file is done", "file", rel)
-			case notify.InDelete:
-				entryLog.Info("File was deleted.", "file", rel)
 			}
 			if matched := ignoreMatcher.MatchesPath(rel); matched {
 				continue
@@ -77,7 +60,6 @@ func Watch(
 			case notify.InDelete:
 				deleted[rel] = struct{}{}
 			}
-			entryLog.Info("modified file: " + rel)
 			timer.Reset(100 * time.Millisecond)
 
 		case <-timer.C:

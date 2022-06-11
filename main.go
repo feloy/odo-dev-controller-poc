@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -21,10 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-func init() {
-	log.SetLogger(zap.New())
-}
-
 func main() {
 	var (
 		namespace       = "project1"
@@ -40,6 +35,13 @@ func main() {
 			panic(err)
 		}
 	}
+
+	f, err := os.Create(".odo/controller.log")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	log.SetLogger(zap.New(zap.WriteTo(f)))
 
 	entryLog := log.Log.WithName("entrypoint")
 
@@ -91,7 +93,6 @@ func main() {
 		})
 		return err
 	}, func(deleted []string, modified []string) error {
-		entryLog.Info("sources change", "deleted", strings.Join(deleted, ", "), "modified", strings.Join(modified, ", "))
 		// TODO create complete + diff tar, update configmap
 		modTime, err = filesystem.Archive(wd, completeTarFile, ignoreMatcher)
 		if err != nil {
