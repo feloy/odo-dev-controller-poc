@@ -18,7 +18,10 @@ import (
 func StartManager(mgr manager.Manager, namespace string, componentName string) error {
 
 	c, err := controller.New("devfile-controller", mgr, controller.Options{
-		Reconciler: &ReconcileConfigmap{Client: mgr.GetClient()},
+		Reconciler: &ReconcileConfigmap{
+			Client:  mgr.GetClient(),
+			Manager: mgr,
+		},
 	})
 	if err != nil {
 		return err

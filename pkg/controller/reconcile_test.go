@@ -92,7 +92,9 @@ var _ = Describe("Static controller", func() {
 
 					BeforeEach(func() {
 						var err error
-						created, err = devfile.CreateConfigMapFromDevfile(ctx, k8sClient, test.devfile, namespace, componentName)
+						created, err = devfile.CreateConfigMapFromDevfile(ctx, k8sClient, namespace, componentName, devfile.ConfigMapContent{
+							Devfile: test.devfile,
+						})
 						Expect(err).Should(Succeed())
 
 						expectedOwnerReference = metav1.OwnerReference{
@@ -130,7 +132,7 @@ var _ = Describe("Static controller", func() {
 						By("having a status of WaitDeployment", func() {
 							Eventually(func() devfile.Status {
 								status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
-								return status
+								return status.Status
 							}, timeout, interval).Should(Equal(devfile.StatusWaitDeployment))
 						})
 					})
@@ -149,13 +151,15 @@ var _ = Describe("Static controller", func() {
 						Specify("the status of the devfile is Ready", func() {
 							Eventually(func() devfile.Status {
 								status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
-								return status
+								return status.Status
 							}, podTimeout, interval).Should(Equal(devfile.StatusReady))
 						})
 
 						When("the Devfile is modified", func() {
 							BeforeEach(func() {
-								_, err := devfile.CreateConfigMapFromDevfile(ctx, k8sClient, test.modifiedDevfile, namespace, componentName)
+								_, err := devfile.CreateConfigMapFromDevfile(ctx, k8sClient, namespace, componentName, devfile.ConfigMapContent{
+									Devfile: test.modifiedDevfile,
+								})
 								Expect(err).Should(Succeed())
 							})
 
@@ -187,7 +191,7 @@ var _ = Describe("Static controller", func() {
 								Specify("the status should be WaitDeployment", func() {
 									Eventually(func() devfile.Status {
 										status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
-										return status
+										return status.Status
 									}, timeout, interval).Should(Equal(devfile.StatusWaitDeployment))
 								})
 
@@ -204,7 +208,7 @@ var _ = Describe("Static controller", func() {
 									Specify("the status of the devfile is Ready", func() {
 										Eventually(func() devfile.Status {
 											status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
-											return status
+											return status.Status
 										}, podTimeout, interval).Should(Equal(devfile.StatusReady))
 									})
 								})

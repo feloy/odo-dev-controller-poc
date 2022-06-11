@@ -3,11 +3,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
+	"github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
 	"github.com/feloy/ododev/pkg/devfile"
+	"github.com/feloy/ododev/pkg/filesystem"
+	"github.com/feloy/ododev/pkg/libdevfile"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,7 +24,8 @@ import (
 )
 
 type ReconcileConfigmap struct {
-	Client client.Client
+	Client  client.Client
+	Manager manager.Manager
 }
 
 var _ reconcile.Reconciler = &ReconcileConfigmap{}
@@ -47,7 +53,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		Controller: pointer.Bool(true),
 	}
 
-	devfileObj, componentName, err := devfile.InfoFromDevfileConfigMap(ctx, r.Client, cm)
+	devfileObj, componentName, completeSyncModTime, err := devfile.InfoFromDevfileConfigMap(ctx, r.Client, cm)
 	if err != nil {
 		log.Error(err, "getting devfile from configmap")
 		return reconcile.Result{}, err
@@ -120,7 +126,10 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	)
 
 	if dep.Status.AvailableReplicas < 1 {
-		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusWaitDeployment)
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+			Status:                devfile.StatusWaitDeployment,
+			SyncedCompleteModTime: pointer.Int64(0),
+		})
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -128,6 +137,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	}
 
 	// state: Deployment has a Running pod
+	log.Info("running pod")
 
 	// Check if all servicebindings' InjectionReady is true
 	allInjected, err := checkServiceBindingsInjectionDone(ctx, r.Client, request.Namespace, componentName)
@@ -136,7 +146,9 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	}
 	if !allInjected {
 		log.Info("missing bindings")
-		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusWaitBindings)
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+			Status: devfile.StatusWaitBindings,
+		})
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -146,11 +158,73 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	// state: All bindings are injected
 	log.Info("all bindings injected")
 
-	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusReady)
+	pod, err := getPod(ctx, r.Client, request.Namespace, componentName)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+		Status: devfile.StatusReady,
+	})
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// TODO sync files, exec commands, etc
+
+	status, err := devfile.GetStatus(ctx, r.Client, request.Namespace, componentName)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	log.Info("get status", "status", status.Status, "synced modtime", status.SyncedCompleteModTime)
+
+	if completeSyncModTime != nil && (status.SyncedCompleteModTime == nil || *completeSyncModTime > *status.SyncedCompleteModTime) {
+		log.Info("syncing file to pod", "pod", pod.GetName(), "modtime", completeSyncModTime, "status modtime", strconv.FormatInt(pointer.Int64Deref(status.SyncedCompleteModTime, 0), 10))
+
+		tarReader, err := os.Open(".odo/complete.tar")
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		defer tarReader.Close()
+
+		err = filesystem.ExtractTarToContainer(ctx, r.Client, r.Manager, pod, "runtime", "/projects", tarReader) // TODO container name, target path
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+			Status:                devfile.StatusReady,
+			SyncedCompleteModTime: completeSyncModTime,
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// build command
+		buildCmd, err := libdevfile.GetDefaultCommand(*devfileObj, v1alpha2.BuildCommandGroupKind)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		err = ExecDevfileCommand(ctx, r.Client, r.Manager, pod, "runtime", "/projects", buildCmd)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// run command
+		runCmd, err := libdevfile.GetDefaultCommand(*devfileObj, v1alpha2.RunCommandGroupKind)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		go func() {
+			err = ExecDevfileCommand(ctx, r.Client, r.Manager, pod, "runtime", "/projects", runCmd)
+			if err != nil {
+				log.Info("terminate run command with err", "err", err)
+			} else {
+				log.Info("terminate run command normally")
+			}
+		}()
+
+	}
+
 	return reconcile.Result{}, nil
 }

@@ -3,6 +3,7 @@ package devfile
 import (
 	"context"
 	"os"
+	"strconv"
 
 	devfilev1 "github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
 	"github.com/devfile/library/pkg/devfile"
@@ -40,14 +41,25 @@ const (
 	StatusReady          Status = "Ready"
 )
 
-func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filename string, namespace string, componentName string) (*corev1.ConfigMap, error) {
-	content, err := os.ReadFile(filename)
+type ConfigMapContent struct {
+	Devfile             string
+	CompleteSyncModTime int64
+}
+
+type StatusContent struct {
+	Status                Status
+	SyncedCompleteModTime *int64
+}
+
+func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, namespace string, componentName string, cmContent ConfigMapContent) (*corev1.ConfigMap, error) {
+	content, err := os.ReadFile(cmContent.Devfile)
 	if err != nil {
 		return nil, err
 	}
 	configMap := corev1.ConfigMap{
 		Data: map[string]string{
-			"devfile": string(content),
+			"devfile":             string(content),
+			"completeSyncModTime": strconv.FormatInt(cmContent.CompleteSyncModTime, 10),
 		},
 	}
 	configMap.SetName(devfileSpecName)
@@ -64,15 +76,24 @@ func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, filen
 	return &configMap, nil
 }
 
-func InfoFromDevfileConfigMap(ctx context.Context, client client.Client, cm corev1.ConfigMap) (*parser.DevfileObj, string, error) {
+func InfoFromDevfileConfigMap(ctx context.Context, client client.Client, cm corev1.ConfigMap) (*parser.DevfileObj, string, *int64, error) {
 	content := cm.Data["devfile"]
 	devfileObj, _, err := devfile.ParseDevfileAndValidate(parser.ParserArgs{
 		Data: []byte(content),
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
-	return &devfileObj, cm.GetLabels()[DevfileSpecLabel], nil
+	var completeSyncModTime *int64
+	if val, ok := cm.Data["completeSyncModTime"]; ok {
+		var modTime int64
+		modTime, err = strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		completeSyncModTime = &modTime
+	}
+	return &devfileObj, cm.GetLabels()[DevfileSpecLabel], completeSyncModTime, nil
 }
 
 // From odo/pkg/devfile
@@ -117,12 +138,21 @@ func GetKubernetesComponentsToPush(devfileObj parser.DevfileObj) ([]devfilev1.Co
 	return k8sComponents, err
 }
 
-func SetStatus(ctx context.Context, client client.Client, namespace string, componentName string, ownerRef metav1.OwnerReference, status Status) error {
+func SetStatus(ctx context.Context, client client.Client, namespace string, componentName string, ownerRef metav1.OwnerReference, status StatusContent) error {
+
+	oldStatus, _ := GetStatus(ctx, client, namespace, componentName)
+
 	configMap := corev1.ConfigMap{
 		Data: map[string]string{
-			"status": string(status),
+			"status": string(status.Status),
 		},
 	}
+	if status.SyncedCompleteModTime != nil {
+		configMap.Data["syncedCompleteModTime"] = strconv.FormatInt(*status.SyncedCompleteModTime, 10)
+	} else if oldStatus.SyncedCompleteModTime != nil {
+		configMap.Data["syncedCompleteModTime"] = strconv.FormatInt(*oldStatus.SyncedCompleteModTime, 10)
+	}
+
 	apiVersion, kind := corev1.SchemeGroupVersion.WithKind("ConfigMap").ToAPIVersionAndKind()
 	configMap.TypeMeta = generator.GetTypeMeta(kind, apiVersion)
 	configMap.SetName(devfileStatusName)
@@ -136,7 +166,7 @@ func SetStatus(ctx context.Context, client client.Client, namespace string, comp
 	return err
 }
 
-func GetStatus(ctx context.Context, client client.Client, namespace string, componentName string) (Status, error) {
+func GetStatus(ctx context.Context, client client.Client, namespace string, componentName string) (StatusContent, error) {
 	cmKey := types.NamespacedName{
 		Namespace: namespace,
 		Name:      devfileStatusName,
@@ -144,7 +174,20 @@ func GetStatus(ctx context.Context, client client.Client, namespace string, comp
 	var cm corev1.ConfigMap
 	err := client.Get(ctx, cmKey, &cm)
 	if err != nil {
-		return "", err
+		return StatusContent{}, err
 	}
-	return Status(cm.Data["status"]), nil
+
+	var syncedCompleteModTime *int64
+	if val, ok := cm.Data["syncedCompleteModTime"]; ok {
+		var modTime int64
+		modTime, err = strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return StatusContent{}, err
+		}
+		syncedCompleteModTime = &modTime
+	}
+	return StatusContent{
+		Status:                Status(cm.Data["status"]),
+		SyncedCompleteModTime: syncedCompleteModTime,
+	}, nil
 }

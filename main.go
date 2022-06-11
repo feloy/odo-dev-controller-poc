@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/feloy/ododev/pkg/controller"
 	"github.com/feloy/ododev/pkg/devfile"
 	"github.com/feloy/ododev/pkg/filesystem"
+	"github.com/feloy/ododev/pkg/sync"
 
 	bindingApi "github.com/redhat-developer/service-binding-operator/apis/binding/v1alpha1"
 
@@ -25,9 +27,19 @@ func init() {
 
 func main() {
 	var (
-		namespace     = "project1"
-		componentName = "my-go-app"
+		namespace       = "project1"
+		componentName   = "my-go-app"
+		dotOdoDirectory = ".odo"
+		completeTarFile = filepath.Join(dotOdoDirectory, "complete.tar")
 	)
+
+	// Check .odo exists
+	err := os.Mkdir(dotOdoDirectory, 0755)
+	if err != nil {
+		if !os.IsExist(err) {
+			panic(err)
+		}
+	}
 
 	entryLog := log.Log.WithName("entrypoint")
 
@@ -55,37 +67,40 @@ func main() {
 		panic(err)
 	}
 	devfilePath := filepath.Join(wd, "devfile.yaml")
+
+	ignoreMatcher, err := filesystem.GetIgnoreMatcher(wd)
+
+	modTime, err := filesystem.Archive(wd, completeTarFile, ignoreMatcher)
+	if err != nil {
+		panic(err)
+	}
+
 	ctx := context.Background()
-	_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
+	_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+		Devfile:             devfilePath,
+		CompleteSyncModTime: modTime,
+	})
 	if err != nil {
 		panic(err)
 	}
 
-	devfileWatcher, err := filesystem.NewDevfileWatcher(devfilePath)
-	if err != nil {
-		panic(err)
-	}
-	defer devfileWatcher.Close()
-
-	for {
-		select {
-		case event, ok := <-devfileWatcher.Events:
-			entryLog.Info("event")
-			if !ok {
-				return
-			}
-			entryLog.Info("modified file: " + event.Name)
-			_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), devfilePath, namespace, componentName)
-			if err != nil {
-				panic(err)
-			}
-		case err, ok := <-devfileWatcher.Errors:
-			entryLog.Info("error")
-			if !ok {
-				return
-			}
-			entryLog.Info("error: ", err)
+	sync.Watch(devfilePath, wd, ignoreMatcher, func() error {
+		_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+			Devfile:             devfilePath,
+			CompleteSyncModTime: modTime,
+		})
+		return err
+	}, func(deleted []string, modified []string) error {
+		entryLog.Info("sources change", "deleted", strings.Join(deleted, ", "), "modified", strings.Join(modified, ", "))
+		// TODO create complete + diff tar, update configmap
+		modTime, err = filesystem.Archive(wd, completeTarFile, ignoreMatcher)
+		if err != nil {
+			panic(err)
 		}
-		entryLog.Info("==========================================")
-	}
+		_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+			Devfile:             devfilePath,
+			CompleteSyncModTime: modTime,
+		})
+		return err
+	})
 }
