@@ -161,7 +161,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		return reconcile.Result{}, err
 	}
 	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
-		Status: devfile.StatusReady,
+		Status: devfile.StatusPodRunning,
 	})
 	if err != nil {
 		return reconcile.Result{}, err
@@ -190,7 +190,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		}
 
 		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
-			Status:                devfile.StatusReady,
+			Status:                devfile.StatusFilesSynced,
 			SyncedCompleteModTime: completeSyncModTime,
 		})
 		if err != nil {
@@ -207,6 +207,14 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 			return reconcile.Result{}, err
 		}
 
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+			Status:                devfile.StatusBuildCommandExecuted,
+			SyncedCompleteModTime: completeSyncModTime,
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
 		// run command
 		runCmd, err := libdevfile.GetDefaultCommand(*devfileObj, v1alpha2.RunCommandGroupKind)
 		if err != nil {
@@ -214,6 +222,10 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		}
 
 		go func() {
+			_ = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+				Status:                devfile.StatusRunCommandExecuted,
+				SyncedCompleteModTime: completeSyncModTime,
+			})
 			err = ExecDevfileCommand(ctx, r.Client, r.Manager, pod, "runtime", "/projects", runCmd)
 			if err != nil {
 				log.Info("terminate run command with err", "err", err)

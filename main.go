@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -85,6 +86,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	devfile.WatchStatus(ctx, mgr.GetClient(), mgr, namespace, componentName, func(status string) {
+		fmt.Printf("new status: %s\n", status)
+	})
 
 	sync.Watch(devfilePath, wd, ignoreMatcher, func() error {
 		_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{

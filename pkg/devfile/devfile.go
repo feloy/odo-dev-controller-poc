@@ -13,10 +13,14 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubectl/pkg/scheme"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	pkgclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -36,9 +40,13 @@ const (
 type Status string
 
 const (
-	StatusWaitDeployment Status = "WaitDeployment"
-	StatusWaitBindings   Status = "WaitBindings"
-	StatusReady          Status = "Ready"
+	StatusWaitDeployment       Status = "WaitDeployment"
+	StatusWaitBindings         Status = "WaitBindings"
+	StatusPodRunning           Status = "PodRunning"
+	StatusFilesSynced          Status = "FilesSynced"
+	StatusBuildCommandExecuted Status = "BuildCommandExecuted"
+	StatusRunCommandExecuted   Status = "RunCommandExecuted"
+	StatusReady                Status = "Ready"
 )
 
 type ConfigMapContent struct {
@@ -190,4 +198,37 @@ func GetStatus(ctx context.Context, client client.Client, namespace string, comp
 		Status:                Status(cm.Data["status"]),
 		SyncedCompleteModTime: syncedCompleteModTime,
 	}, nil
+}
+
+func WatchStatus(ctx context.Context, client client.Client, mgr manager.Manager, namespace string, componentName string, newStatus func(status string)) error {
+	cmGVK := corev1.SchemeGroupVersion.WithKind("ConfigMap")
+
+	rest, err := apiutil.RESTClientForGVK(cmGVK, true, mgr.GetConfig(), serializer.NewCodecFactory(mgr.GetScheme()))
+	if err != nil {
+		return err
+	}
+
+	opts := metav1.ListOptions{
+		Watch:         true,
+		FieldSelector: "metadata.name=devfile-status",
+	}
+
+	watcher, err := rest.Get().
+		Resource("configmaps").
+		Namespace(namespace).
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Watch(ctx)
+
+	if err != nil {
+		return err
+	}
+	for event := range watcher.ResultChan() {
+		switch obj := event.Object.(type) {
+		case *corev1.ConfigMap:
+			status := obj.Data["status"]
+			newStatus(status)
+		case *metav1.Status:
+		}
+	}
+	return nil
 }
