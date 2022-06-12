@@ -178,6 +178,11 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	if completeSyncModTime != nil && (status.SyncedCompleteModTime == nil || *completeSyncModTime > *status.SyncedCompleteModTime) {
 		log.Info("syncing file to pod", "pod", pod.GetName(), "modtime", completeSyncModTime, "status modtime", strconv.FormatInt(pointer.Int64Deref(status.SyncedCompleteModTime, 0), 10))
 
+		err = StopDevfileCommand(ctx, r.Client, r.Manager, pod, "runtime")
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
 		tarReader, err := os.Open(".odo/complete.tar")
 		if err != nil {
 			return reconcile.Result{}, err

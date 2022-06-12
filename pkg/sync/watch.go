@@ -6,6 +6,9 @@ import (
 
 	"github.com/feloy/ododev/pkg/filesystem"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/watch"
+
 	"github.com/rjeczalik/notify"
 	gitignore "github.com/sabhiram/go-gitignore"
 )
@@ -14,6 +17,8 @@ func Watch(
 	devfilePath string,
 	wd string,
 	ignoreMatcher *gitignore.GitIgnore,
+	statusWatcher <-chan watch.Event,
+	updatedStatus func(status string),
 	modifiedDevfile func() error,
 	modifiedSources func(deleted []string, modified []string) error,
 ) error {
@@ -66,6 +71,14 @@ func Watch(
 			modifiedSources(mapKeysToSlice(deleted), mapKeysToSlice(modified))
 			deleted = map[string]struct{}{}
 			modified = map[string]struct{}{}
+
+		case event := <-statusWatcher:
+			switch obj := event.Object.(type) {
+			case *corev1.ConfigMap:
+				status := obj.Data["status"]
+				updatedStatus(status)
+			}
+
 		}
 
 	}

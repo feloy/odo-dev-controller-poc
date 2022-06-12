@@ -148,11 +148,11 @@ var _ = Describe("Static controller", func() {
 						//				Expect(k8sClient.Status().Update(ctx, &deployment)).Should(Succeed())
 						//			})
 
-						Specify("the status of the devfile is Ready", func() {
+						Specify("the status of the devfile is PodRunning", func() {
 							Eventually(func() devfile.Status {
 								status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
 								return status.Status
-							}, podTimeout, interval).Should(Equal(devfile.StatusReady))
+							}, podTimeout, interval).Should(Equal(devfile.StatusPodRunning))
 						})
 
 						When("the Devfile is modified", func() {
@@ -205,11 +205,11 @@ var _ = Describe("Static controller", func() {
 									//	Expect(k8sClient.Status().Update(ctx, &deployment)).Should(Succeed())
 									//})
 
-									Specify("the status of the devfile is Ready", func() {
+									Specify("the status of the devfile is PodRunning", func() {
 										Eventually(func() devfile.Status {
 											status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
 											return status.Status
-										}, podTimeout, interval).Should(Equal(devfile.StatusReady))
+										}, podTimeout, interval).Should(Equal(devfile.StatusPodRunning))
 									})
 								})
 							})

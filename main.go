@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -87,26 +88,37 @@ func main() {
 		panic(err)
 	}
 
-	devfile.WatchStatus(ctx, mgr.GetClient(), mgr, namespace, componentName, func(status string) {
-		fmt.Printf("new status: %s\n", status)
-	})
+	statusWatcher, err := devfile.WatchStatus(ctx, mgr.GetClient(), mgr, namespace, componentName)
+	if err != nil {
+		panic(err)
+	}
 
-	sync.Watch(devfilePath, wd, ignoreMatcher, func() error {
-		_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
-			Devfile:             devfilePath,
-			CompleteSyncModTime: modTime,
+	sync.Watch(devfilePath, wd, ignoreMatcher, statusWatcher,
+		func(status string) {
+			fmt.Printf("new status: %s\n", status)
+		},
+		func() error {
+			_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+				Devfile:             devfilePath,
+				CompleteSyncModTime: modTime,
+			})
+			return err
+		}, func(deleted []string, modified []string) error {
+			if len(modified) > 0 {
+				fmt.Printf("Files modified: %s\n", strings.Join(modified, ", "))
+			}
+			if len(deleted) > 0 {
+				fmt.Printf("Files deleted: %s\n", strings.Join(deleted, ", "))
+			}
+			// TODO create complete + diff tar, update configmap
+			modTime, err = filesystem.Archive(wd, completeTarFile, ignoreMatcher)
+			if err != nil {
+				panic(err)
+			}
+			_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+				Devfile:             devfilePath,
+				CompleteSyncModTime: modTime,
+			})
+			return err
 		})
-		return err
-	}, func(deleted []string, modified []string) error {
-		// TODO create complete + diff tar, update configmap
-		modTime, err = filesystem.Archive(wd, completeTarFile, ignoreMatcher)
-		if err != nil {
-			panic(err)
-		}
-		_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
-			Devfile:             devfilePath,
-			CompleteSyncModTime: modTime,
-		})
-		return err
-	})
 }

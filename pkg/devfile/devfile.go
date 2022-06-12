@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubectl/pkg/scheme"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -200,12 +201,18 @@ func GetStatus(ctx context.Context, client client.Client, namespace string, comp
 	}, nil
 }
 
-func WatchStatus(ctx context.Context, client client.Client, mgr manager.Manager, namespace string, componentName string, newStatus func(status string)) error {
+func WatchStatus(
+	ctx context.Context,
+	client client.Client,
+	mgr manager.Manager,
+	namespace string,
+	componentName string,
+) (<-chan watch.Event, error) {
 	cmGVK := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 
 	rest, err := apiutil.RESTClientForGVK(cmGVK, true, mgr.GetConfig(), serializer.NewCodecFactory(mgr.GetScheme()))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	opts := metav1.ListOptions{
@@ -218,17 +225,9 @@ func WatchStatus(ctx context.Context, client client.Client, mgr manager.Manager,
 		Namespace(namespace).
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Watch(ctx)
-
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for event := range watcher.ResultChan() {
-		switch obj := event.Object.(type) {
-		case *corev1.ConfigMap:
-			status := obj.Data["status"]
-			newStatus(status)
-		case *metav1.Status:
-		}
-	}
-	return nil
+
+	return watcher.ResultChan(), nil
 }
