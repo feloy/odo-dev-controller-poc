@@ -3,3 +3,6 @@ bin:
 
 install: bin
 	cp ododev ${HOME}/bin
+
+tests:
+	ginkgo -v ./pkg/controller/

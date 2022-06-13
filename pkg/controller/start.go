@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"context"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -8,14 +10,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/feloy/ododev/pkg/devfile"
 )
 
-func StartManager(mgr manager.Manager, namespace string, componentName string) error {
+func StartManager(ctx context.Context, mgr manager.Manager, namespace string, componentName string) error {
 
 	c, err := controller.New("devfile-controller", mgr, controller.Options{
 		Reconciler: &ReconcileConfigmap{
@@ -67,7 +68,7 @@ func StartManager(mgr manager.Manager, namespace string, componentName string) e
 		return err
 	}
 
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		return err
 	}
 	return nil

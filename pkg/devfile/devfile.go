@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"time"
 
 	devfilev1 "github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
 	"github.com/devfile/library/pkg/devfile"
@@ -12,6 +13,7 @@ import (
 	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
@@ -83,6 +85,56 @@ func CreateConfigMapFromDevfile(ctx context.Context, client client.Client, names
 		return nil, err
 	}
 	return &configMap, nil
+}
+
+func DeleteConfigMapAndWait(ctx context.Context, mgr manager.Manager, client client.Client, cm *corev1.ConfigMap) error {
+	cmGVK := corev1.SchemeGroupVersion.WithKind("ConfigMap")
+
+	rest, err := apiutil.RESTClientForGVK(cmGVK, true, mgr.GetConfig(), serializer.NewCodecFactory(mgr.GetScheme()))
+	if err != nil {
+		return err
+	}
+
+	opts := metav1.ListOptions{
+		Watch:         true,
+		FieldSelector: "metadata.name=devfile-spec",
+	}
+
+	watcher, err := rest.Get().
+		Resource("configmaps").
+		Namespace(cm.GetNamespace()).
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Watch(ctx)
+	if err != nil {
+		return err
+	}
+
+	prop := metav1.DeletePropagationForeground
+	// use a new context as the previous one is canceled
+	err = client.Delete(ctx, cm, &pkgclient.DeleteOptions{
+		PropagationPolicy: &prop,
+	})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	timer := time.NewTimer(1 * time.Minute)
+outer:
+	for {
+		select {
+		case event := <-watcher.ResultChan():
+			if event.Type == watch.Deleted {
+				break outer
+			}
+		case <-timer.C:
+			break outer
+		}
+	}
+
+	return nil
 }
 
 func InfoFromDevfileConfigMap(ctx context.Context, client client.Client, cm corev1.ConfigMap) (*parser.DevfileObj, string, *int64, error) {

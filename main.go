@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/feloy/ododev/pkg/controller"
 	"github.com/feloy/ododev/pkg/devfile"
@@ -54,9 +55,11 @@ func main() {
 		panic(err)
 	}
 
+	ctx := signals.SetupSignalHandler()
+
 	go func() {
 		entryLog.Info("starting manager")
-		err := controller.StartManager(mgr, namespace, componentName)
+		err := controller.StartManager(ctx, mgr, namespace, componentName)
 		if err != nil {
 			panic(err)
 		}
@@ -79,8 +82,7 @@ func main() {
 		panic(err)
 	}
 
-	ctx := context.Background()
-	_, err = devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
+	devfileConfigMap, err := devfile.CreateConfigMapFromDevfile(ctx, mgr.GetClient(), namespace, componentName, devfile.ConfigMapContent{
 		Devfile:             devfilePath,
 		CompleteSyncModTime: modTime,
 	})
@@ -93,7 +95,7 @@ func main() {
 		panic(err)
 	}
 
-	sync.Watch(devfilePath, wd, ignoreMatcher, statusWatcher,
+	sync.Watch(ctx, devfilePath, wd, ignoreMatcher, statusWatcher,
 		func(status string) {
 			fmt.Printf("new status: %s\n", status)
 		},
@@ -121,4 +123,11 @@ func main() {
 			})
 			return err
 		})
+
+	fmt.Println("Cleanup resources, please wait or press Ctrl-c again to not wait resource cleanup is done")
+	// use a new context as the previous has been canceled
+	err = devfile.DeleteConfigMapAndWait(context.Background(), mgr, mgr.GetClient(), devfileConfigMap)
+	if err != nil {
+		panic(err)
+	}
 }

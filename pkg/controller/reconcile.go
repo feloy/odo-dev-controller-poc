@@ -44,11 +44,12 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	}
 
 	ownerRef := metav1.OwnerReference{
-		APIVersion: cm.APIVersion,
-		Kind:       cm.Kind,
-		Name:       cm.GetName(),
-		UID:        cm.GetUID(),
-		Controller: pointer.Bool(true),
+		APIVersion:         cm.APIVersion,
+		Kind:               cm.Kind,
+		Name:               cm.GetName(),
+		UID:                cm.GetUID(),
+		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: pointer.Bool(true),
 	}
 
 	devfileObj, componentName, completeSyncModTime, err := devfile.InfoFromDevfileConfigMap(ctx, r.Client, cm)

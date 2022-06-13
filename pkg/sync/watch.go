@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"path/filepath"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 )
 
 func Watch(
+	ctx context.Context,
 	devfilePath string,
 	wd string,
 	ignoreMatcher *gitignore.GitIgnore,
@@ -42,6 +44,10 @@ func Watch(
 
 	for {
 		select {
+
+		case <-ctx.Done():
+			// context is canceled
+			return nil
 
 		case <-devfileWatcher:
 			err = modifiedDevfile()

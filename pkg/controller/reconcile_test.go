@@ -103,7 +103,7 @@ var _ = Describe("Static controller", func() {
 							Name:               "devfile-spec",
 							UID:                created.UID,
 							Controller:         pointer.Bool(true),
-							BlockOwnerDeletion: nil,
+							BlockOwnerDeletion: pointer.Bool(true),
 						}
 					})
 

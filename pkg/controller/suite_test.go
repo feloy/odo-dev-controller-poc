@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -58,7 +59,7 @@ var _ = BeforeSuite(func(done Done) {
 	})
 
 	go func() {
-		err = StartManager(k8sManager, namespace, componentName)
+		err = StartManager(context.Background(), k8sManager, namespace, componentName)
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
