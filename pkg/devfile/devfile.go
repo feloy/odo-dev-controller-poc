@@ -48,7 +48,7 @@ const (
 	StatusPodRunning           Status = "PodRunning"
 	StatusFilesSynced          Status = "FilesSynced"
 	StatusBuildCommandExecuted Status = "BuildCommandExecuted"
-	StatusRunCommandExecuted   Status = "RunCommandExecuted"
+	StatusRunCommandRunning    Status = "RunCommandRunning"
 	StatusReady                Status = "Ready"
 )
 

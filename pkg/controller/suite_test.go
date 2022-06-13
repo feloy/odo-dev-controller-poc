@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -49,9 +50,11 @@ var _ = BeforeSuite(func(done Done) {
 		UseExistingCluster: pointer.Bool(true),
 	}
 
+	_ = os.Mkdir(".odo", 0755)
+
 	var err error
 	cfg, err = testEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).To(Succeed())
 	Expect(cfg).ToNot(BeNil())
 
 	k8sManager, err = manager.New(cfg, manager.Options{
@@ -68,7 +71,7 @@ var _ = BeforeSuite(func(done Done) {
 	// +kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).To(Succeed())
 	Expect(k8sClient).ToNot(BeNil())
 
 	close(done)
@@ -77,5 +80,5 @@ var _ = BeforeSuite(func(done Done) {
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).To(Succeed())
 })

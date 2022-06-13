@@ -47,7 +47,7 @@ func getAllFiles(rootPath string, ignoreMatcher *gitignore.GitIgnore) ([]string,
 				return err
 			}
 
-			if matched := ignoreMatcher.MatchesPath(rel); matched {
+			if ignoreMatcher != nil && ignoreMatcher.MatchesPath(rel) {
 				if info.IsDir() {
 					return filepath.SkipDir
 				} else {

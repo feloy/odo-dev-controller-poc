@@ -2,10 +2,14 @@ package controller
 
 import (
 	"context"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/feloy/ododev/pkg/devfile"
+	"github.com/feloy/ododev/pkg/filesystem"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -155,65 +159,99 @@ var _ = Describe("Static controller", func() {
 							}, podTimeout, interval).Should(Equal(devfile.StatusPodRunning))
 						})
 
-						When("the Devfile is modified", func() {
+						When("sources are placed in .odo/complete.tar and increment set to spec", func() {
 							BeforeEach(func() {
-								_, err := devfile.CreateConfigMapFromDevfile(ctx, k8sClient, namespace, componentName, devfile.ConfigMapContent{
-									Devfile: test.modifiedDevfile,
+								absPath, err := filepath.Abs("tests/project")
+								Expect(err).To(Succeed())
+								modTime, err := filesystem.Archive(absPath, ".odo/complete.tar", nil)
+								Expect(err).To(Succeed())
+								_, err = devfile.CreateConfigMapFromDevfile(ctx, k8sClient, namespace, componentName, devfile.ConfigMapContent{
+									Devfile:             test.devfile,
+									CompleteSyncModTime: modTime,
 								})
-								Expect(err).Should(Succeed())
+								Expect(err).To(Succeed())
 							})
 
-							Specify("the Deployment should be modified", func() {
-								By("having a memory limit set to 1Gi", func() {
-									var deployment appsv1.Deployment
-									Eventually(func() string {
-										err := k8sClient.Get(ctx, deploymentKey, &deployment)
-										if err != nil {
-											return ""
-										}
-										return deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()
-									}, timeout, interval).Should(Equal("1Gi"))
-								})
-							})
-
-							When("the number of available replicas is set to zero (by the deployment controller)", func() {
-								//BeforeEach(func() {
-								//	Eventually(func() error {
-								//		var deployment appsv1.Deployment
-								//		Expect(k8sClient.Get(ctx, deploymentKey, &deployment)).Should(Succeed())
-								//		deployment.Status.Replicas = 0
-								//		deployment.Status.ReadyReplicas = 0
-								//		deployment.Status.AvailableReplicas = 0
-								//		return k8sClient.Status().Update(ctx, &deployment)
-								//	}).Should(Succeed())
-								//})
-
-								Specify("the status should be WaitDeployment", func() {
+							Specify("the container is running", func() {
+								By("having a status RunCommandRunning", func() {
 									Eventually(func() devfile.Status {
 										status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
 										return status.Status
-									}, timeout, interval).Should(Equal(devfile.StatusWaitDeployment))
+									}, podTimeout, interval).Should(Equal(devfile.StatusRunCommandRunning))
 								})
 
-								When("the deployment has one available replica (by the deployment controller)", func() {
-									//BeforeEach(func() {
-									//	var deployment appsv1.Deployment
-									//	Expect(k8sClient.Get(ctx, deploymentKey, &deployment)).Should(Succeed())
-									//	deployment.Status.Replicas = 1
-									//	deployment.Status.ReadyReplicas = 1
-									//	deployment.Status.AvailableReplicas = 1
-									//	Expect(k8sClient.Status().Update(ctx, &deployment)).Should(Succeed())
-									//})
-
-									Specify("the status of the devfile is PodRunning", func() {
-										Eventually(func() devfile.Status {
-											status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
-											return status.Status
-										}, podTimeout, interval).Should(Equal(devfile.StatusPodRunning))
-									})
+								By("replying to GET HTTP request", func() {
+									Eventually(func() string {
+										resp, err := http.Get("http://localhost:40001")
+										Expect(err).To(Succeed())
+										defer resp.Body.Close()
+										body, err := ioutil.ReadAll(resp.Body)
+										Expect(err).To(Succeed())
+										return string(body)
+									}, timeout, interval).Should(Equal("Salut, !"))
 								})
 							})
 
+							When("the Devfile is modified", func() {
+								BeforeEach(func() {
+									_, err := devfile.CreateConfigMapFromDevfile(ctx, k8sClient, namespace, componentName, devfile.ConfigMapContent{
+										Devfile: test.modifiedDevfile,
+									})
+									Expect(err).Should(Succeed())
+								})
+
+								Specify("the Deployment should be modified", func() {
+									By("having a memory limit set to 1Gi", func() {
+										var deployment appsv1.Deployment
+										Eventually(func() string {
+											err := k8sClient.Get(ctx, deploymentKey, &deployment)
+											if err != nil {
+												return ""
+											}
+											return deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()
+										}, timeout, interval).Should(Equal("1Gi"))
+									})
+								})
+
+								When("the number of available replicas is set to zero (by the deployment controller)", func() {
+									//BeforeEach(func() {
+									//	Eventually(func() error {
+									//		var deployment appsv1.Deployment
+									//		Expect(k8sClient.Get(ctx, deploymentKey, &deployment)).Should(Succeed())
+									//		deployment.Status.Replicas = 0
+									//		deployment.Status.ReadyReplicas = 0
+									//		deployment.Status.AvailableReplicas = 0
+									//		return k8sClient.Status().Update(ctx, &deployment)
+									//	}).Should(Succeed())
+									//})
+
+									Specify("the status should be WaitDeployment", func() {
+										Eventually(func() devfile.Status {
+											status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
+											return status.Status
+										}, timeout, interval).Should(Equal(devfile.StatusWaitDeployment))
+									})
+
+									When("the deployment has one available replica (by the deployment controller)", func() {
+										//BeforeEach(func() {
+										//	var deployment appsv1.Deployment
+										//	Expect(k8sClient.Get(ctx, deploymentKey, &deployment)).Should(Succeed())
+										//	deployment.Status.Replicas = 1
+										//	deployment.Status.ReadyReplicas = 1
+										//	deployment.Status.AvailableReplicas = 1
+										//	Expect(k8sClient.Status().Update(ctx, &deployment)).Should(Succeed())
+										//})
+
+										Specify("the status of the devfile is PodRunning", func() {
+											Eventually(func() devfile.Status {
+												status, _ := devfile.GetStatus(ctx, k8sClient, namespace, componentName)
+												return status.Status
+											}, podTimeout, interval).Should(Equal(devfile.StatusPodRunning))
+										})
+									})
+								})
+
+							})
 						})
 					})
 				})

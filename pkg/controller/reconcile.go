@@ -171,16 +171,27 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
-		Status: devfile.StatusPodRunning,
-	})
+
+	status, err := devfile.GetStatus(ctx, r.Client, request.Namespace, componentName)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
+	if status.Status == devfile.StatusWaitDeployment || status.Status == devfile.StatusWaitBindings {
+		err = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
+			Status: devfile.StatusPodRunning,
+		})
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	// TODO sync files, exec commands, etc
 
-	status, err := devfile.GetStatus(ctx, r.Client, request.Namespace, componentName)
+	status, err = devfile.GetStatus(ctx, r.Client, request.Namespace, componentName)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -253,7 +264,7 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		go func() {
 
 			_ = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
-				Status:                devfile.StatusRunCommandExecuted,
+				Status:                devfile.StatusRunCommandRunning,
 				SyncedCompleteModTime: completeSyncModTime,
 			})
 
