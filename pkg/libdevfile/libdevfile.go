@@ -1,6 +1,9 @@
 package libdevfile
 
 import (
+	"fmt"
+	"net"
+
 	"github.com/devfile/api/v2/pkg/apis/workspaces/v1alpha2"
 	"github.com/devfile/library/pkg/devfile/parser"
 	"github.com/devfile/library/pkg/devfile/parser/data/v2/common"
@@ -45,4 +48,69 @@ func GetDefaultCommand(
 		return foundGroupCmd, nil
 	}
 	return groupCmds[0], nil
+}
+
+func GetPortPairs(devFileObj parser.DevfileObj) ([]string, error) {
+
+	containers, err := devFileObj.Data.GetComponents(common.DevfileOptions{
+		ComponentOptions: common.ComponentOptions{ComponentType: v1alpha2.ContainerComponentType},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ceMapping := make(map[string][]int)
+	for _, container := range containers {
+		if container.ComponentUnion.Container == nil {
+			// this is not a container component; continue prevents panic when accessing Endpoints field
+			continue
+		}
+		k := container.Name
+		if _, ok := ceMapping[k]; !ok {
+			ceMapping[k] = []int{}
+		}
+
+		endpoints := container.Container.Endpoints
+		for _, e := range endpoints {
+			if e.Exposure != v1alpha2.NoneEndpointExposure {
+				ceMapping[k] = append(ceMapping[k], e.TargetPort)
+			}
+		}
+	}
+
+	portPairs := make(map[string][]string)
+	port := 40000
+
+	for name, ports := range ceMapping {
+		for _, p := range ports {
+			port++
+			for {
+				isPortFree := isPortFree(port)
+				if isPortFree {
+					pair := fmt.Sprintf("%d:%d", port, p)
+					portPairs[name] = append(portPairs[name], pair)
+					break
+				}
+				port++
+			}
+		}
+	}
+
+	var portPairsSlice []string
+	for _, v1 := range portPairs {
+		portPairsSlice = append(portPairsSlice, v1...)
+	}
+
+	return portPairsSlice, nil
+}
+
+func isPortFree(port int) bool {
+	address := fmt.Sprintf("localhost:%d", port)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return false
+	}
+	_ = listener.Addr().(*net.TCPAddr).Port
+	err = listener.Close()
+	return err == nil
 }

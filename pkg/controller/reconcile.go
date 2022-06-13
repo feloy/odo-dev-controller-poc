@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -25,6 +26,8 @@ import (
 type ReconcileConfigmap struct {
 	Client  client.Client
 	Manager manager.Manager
+
+	portForwardStopChan chan struct{}
 }
 
 var _ reconcile.Reconciler = &ReconcileConfigmap{}
@@ -132,6 +135,13 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		if err != nil {
 			return reconcile.Result{}, err
 		}
+
+		// Stop port forwarding, if any
+		if r.portForwardStopChan != nil {
+			fmt.Println("stopping port forwarding")
+			r.portForwardStopChan <- struct{}{}
+			r.portForwardStopChan = nil
+		}
 		return reconcile.Result{}, nil
 	}
 
@@ -221,6 +231,19 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 			return reconcile.Result{}, err
 		}
 
+		// restart port forwarding
+		if r.portForwardStopChan == nil {
+			portPairs, err := libdevfile.GetPortPairs(*devfileObj)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			fmt.Printf("starting port forwarding in ports: %s\n", portPairs)
+			r.portForwardStopChan, err = container.SetupPortForwarding(r.Manager, r.Client, pod, portPairs, os.Stdout, os.Stderr)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+
 		// run command
 		runCmd, err := libdevfile.GetDefaultCommand(*devfileObj, v1alpha2.RunCommandGroupKind)
 		if err != nil {
@@ -228,10 +251,12 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 		}
 
 		go func() {
+
 			_ = devfile.SetStatus(ctx, r.Client, request.Namespace, componentName, ownerRef, devfile.StatusContent{
 				Status:                devfile.StatusRunCommandExecuted,
 				SyncedCompleteModTime: completeSyncModTime,
 			})
+
 			err = ExecDevfileCommand(ctx, r.Client, r.Manager, pod, "runtime", "/projects", runCmd)
 			if err != nil {
 				log.Info("terminate run command with err", "err", err)
@@ -239,7 +264,6 @@ func (r *ReconcileConfigmap) Reconcile(ctx context.Context, request reconcile.Re
 				log.Info("terminate run command normally")
 			}
 		}()
-
 	}
 
 	return reconcile.Result{}, nil
